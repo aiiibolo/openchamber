@@ -50,6 +50,7 @@ describe('fetchOpenCodeSkillsFromApi payload mapping', () => {
       { id: 'v2-path-skill', name: 'v2-path-skill', path: path.join(projectRoot, '.agents', 'skills', 'v2-path-skill'), description: 'v2 path', content: 'content-v2' },
       { id: 'v1-location-skill', name: 'v1-location-skill', location: path.join(projectRoot, '.agents', 'skills', 'v1-location-skill'), description: 'v1 location', content: 'content-v1' },
       { id: 'builtin-skill', name: 'builtin-skill', path: '<built-in>', description: 'built-in' },
+      { id: 'opencode', name: 'OpenCode', path: '/builtin/opencode.md', description: 'v2 built-in', content: 'builtin-content' },
       { id: 'unlocated-skill', name: 'unlocated-skill', description: 'no location at all' },
     ];
     const fetchMock = stubSkillListResponse(workspaces);
@@ -88,6 +89,16 @@ describe('fetchOpenCodeSkillsFromApi payload mapping', () => {
       source: 'opencode',
       description: 'built-in',
       content: '',
+    });
+
+    // OpenCode v2 built-ins carry a synthetic `/builtin/` path; normalize to the read-only marker.
+    expect(byName.get('OpenCode')).toEqual({
+      name: 'OpenCode',
+      path: '<built-in>',
+      scope: 'user',
+      source: 'opencode',
+      description: 'v2 built-in',
+      content: 'builtin-content',
     });
 
     // Items with neither field are dropped, unchanged.

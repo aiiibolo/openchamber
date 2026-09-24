@@ -240,6 +240,12 @@ describe('skill-routes directory soft fallback', () => {
             description: 'Delivered with the legacy location field',
           },
           {
+            id: 'opencode',
+            name: 'OpenCode',
+            path: '/builtin/opencode.md',
+            description: 'v2 built-in skill with a synthetic path',
+          },
+          {
             id: 'unlocated-skill',
             name: 'unlocated-skill',
             description: 'Has neither field; must be dropped',
@@ -274,6 +280,9 @@ describe('skill-routes directory soft fallback', () => {
 
       expect(byName.has('v1-location-skill')).toBe(true);
       expect(byName.get('v1-location-skill').path).toContain('v1-location-skill');
+
+      expect(byName.get('OpenCode')?.path).toBe('<built-in>');
+      expect(byName.get('OpenCode')?.renamable).toBe(false);
 
       expect(byName.has('unlocated-skill')).toBe(false);
     } finally {
