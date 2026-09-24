@@ -151,7 +151,10 @@ export const registerSkillRoutes = (app, dependencies) => {
       return payload
         .map((item) => {
           const name = typeof item?.name === 'string' ? item.name.trim() : '';
-          const location = typeof item?.location === 'string' ? item.location : '';
+          // OpenCode v1's skill payload used `location`; v2 renamed the field
+          // to `path`. Accept both, or the whole authoritative list is dropped
+          // and the panel falls back to the (smaller) local disk scan.
+          const location = typeof item?.path === 'string' ? item.path : (typeof item?.location === 'string' ? item.location : '');
           const description = typeof item?.description === 'string' ? item.description : '';
           const content = typeof item?.content === 'string' ? item.content : '';
           if (!name || !location) {
