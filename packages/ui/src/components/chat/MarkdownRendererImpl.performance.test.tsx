@@ -420,8 +420,8 @@ describe('MarkdownRenderer DOM mount performance contract', () => {
       expect(table).not.toBeNull();
       expect(table?.getAttribute('data-md-table-layout')).toBe('fixed');
       expect(table?.style.tableLayout).toBe('fixed');
-      expect(table?.style.width).toBe('626px');
-      expect(columnWidths).toEqual(['120px', '186px', '320px']);
+      expect(table?.style.width).toBe('1106px');
+      expect(columnWidths).toEqual(['120px', '186px', '800px']);
       expect(table?.classList.contains('w-max')).toBe(true);
       expect(table?.classList.contains('min-w-full')).toBe(false);
       expect(table?.classList.contains('w-full')).toBe(false);
@@ -431,12 +431,51 @@ describe('MarkdownRenderer DOM mount performance contract', () => {
       expect(wrapper?.classList.contains('max-w-full')).toBe(true);
       expect(cells.length).toBeGreaterThan(0);
       expect(cells.every((cell) => cell.classList.contains('min-w-[120px]'))).toBe(true);
-      expect(cells.every((cell) => cell.classList.contains('max-w-[320px]'))).toBe(true);
+      expect(cells.every((cell) => !cell.classList.contains('max-w-[320px]'))).toBe(true);
       expect(cells.every((cell) => (
         cell.classList.contains('whitespace-normal')
         && cell.classList.contains('[overflow-wrap:anywhere]')
       ))).toBe(true);
       expect(counts.tableProbeReads).toBe(tableProbeReads);
+    } finally {
+      tableProbeWidths = null;
+      await act(async () => root.unmount());
+    }
+  });
+
+  test('keeps an inline-code identifier on its natural-width column when the message has room', async () => {
+    const content = [
+      '| Widget | Processing state | Count |',
+      '| --- | --- | ---: |',
+      '| `widget-alpha` | `processing_completed_successfully` | 120 |',
+      '| `widget-beta` | `processing_completed_with_warning` | 45 |',
+    ].join('\n');
+    tableProbeWidths = new Map([
+      ['widget-alphawidget-beta', 150],
+      ['processing_completed_successfullyprocessing_completed_with_warning', 420],
+      ['12045', 80],
+    ]);
+    const host = document.createElement('div');
+    host.style.width = '900px';
+    document.body.replaceChildren(host);
+    const root = createRoot(host);
+
+    try {
+      await act(async () => {
+        root.render(<MarkdownRenderer content={content} messageId="table-identifier" isAnimated={false} enableFileReferences={false} />);
+        await waitForSettledEffects();
+      });
+      await flushAnimationFrame();
+
+      const table = host.querySelector<HTMLTableElement>('[data-markdown="table"]');
+      const columns = Array.from(table?.querySelectorAll<HTMLTableColElement>('colgroup col') ?? [])
+        .map((column) => column.style.width);
+      expect(table?.querySelector('td code')?.textContent).toBe('widget-alpha');
+      expect(columns).toEqual(['150px', '420px', '120px']);
+      expect(table?.style.width).toBe('690px');
+      expect(table?.querySelector('td')?.classList.contains('max-w-[320px]')).toBe(false);
+      expect(table?.querySelectorAll('td code.whitespace-nowrap')).toHaveLength(4);
+      expect(table?.closest('[data-markdown="table-wrapper"]')?.classList.contains('w-fit')).toBe(true);
     } finally {
       tableProbeWidths = null;
       await act(async () => root.unmount());
