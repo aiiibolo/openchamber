@@ -350,6 +350,7 @@ const buildTableMenu = (action: string, items: Array<{ key: string; label: strin
 };
 
 const TABLE_COLUMN_MIN_WIDTH = 120;
+const TABLE_COLUMN_FALLBACK_MAX_WIDTH = 320;
 const TABLE_LAYOUT_ATTR = 'data-md-table-layout';
 
 const decorateTables = (root: HTMLElement, labels: DecorateLabels): void => {
@@ -477,13 +478,18 @@ export const stabilizeMarkdownTableWidths = (root: HTMLElement): void => {
   });
 
   root.appendChild(measurementRoot);
-  const plans = probes.map(({ table, columnProbes }) => ({
-    table,
-    widths: columnProbes.map((probe) => Math.max(
-      TABLE_COLUMN_MIN_WIDTH,
-      Math.ceil(probe.getBoundingClientRect().width),
-    )),
-  }));
+  const plans = probes.map(({ table, columnProbes }) => {
+    const availableWidth = table.parentElement?.clientWidth ?? 0;
+    // Without layout (for example, a hidden chat), retain the former limit.
+    const maxColumnWidth = Math.max(TABLE_COLUMN_MIN_WIDTH, availableWidth || TABLE_COLUMN_FALLBACK_MAX_WIDTH);
+    return {
+      table,
+      widths: columnProbes.map((probe) => Math.min(
+        maxColumnWidth,
+        Math.max(TABLE_COLUMN_MIN_WIDTH, Math.ceil(probe.getBoundingClientRect().width)),
+      )),
+    };
+  });
   measurementRoot.remove();
 
   for (const { table, widths } of plans) {
