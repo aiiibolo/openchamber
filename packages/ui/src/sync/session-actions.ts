@@ -1637,9 +1637,10 @@ export async function unarchiveSession(sessionId: string, expectedRuntimeKey = g
     const store = sessionDirectory ? _childStores?.getChild(sessionDirectory) : undefined
     if (store) {
       const before = store.getState()
-      const statuses = await opencodeClient.getActiveSessionStatuses()
-      if (isStaleRuntime(expectedRuntimeKey)) return false
-      if (statuses !== null) {
+      // The restore already committed. A rejected status read is unknown, not
+      // an action failure or a reason to mark this session idle.
+      const statuses = await opencodeClient.getActiveSessionStatuses().catch(() => null)
+      if (!isStaleRuntime(expectedRuntimeKey) && statuses !== null) {
         store.setState((current) => {
           if (current.sessionStatusInvalidated !== before.sessionStatusInvalidated
             || current.session_status[sessionId] !== before.session_status[sessionId]) return current

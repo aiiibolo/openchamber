@@ -1003,9 +1003,11 @@ describe("session restore (unarchive)", () => {
   test("does not restore locally until the server returns the restored session", async () => {
     const source = createStore({}, { session: [] })
     const { unarchiveSession, setActionRefs } = await import("./session-actions")
+    const { takeSessionActionFailure } = await import("./session-action-failures")
     setActionRefs(createChildStores([["/test/project", source]]), () => "/test/project")
 
     expect(await unarchiveSession("session-a")).toBe(false)
+    expect(takeSessionActionFailure(["session-a"])?.message).toContain("unarchive failed")
     expect(globalUpsertedSessions).toEqual([])
     expect(registeredSessionDirectories).toEqual([])
     const { useSessionOrderingStore } = await import("./session-ordering")
@@ -1060,6 +1062,45 @@ describe("session restore (unarchive)", () => {
     expect(await unarchiveSession("session-a")).toBe(true)
     expect(source.getState().session_status["session-a"]).toBeUndefined()
     expect(source.getState().sessionStatusInvalidated?.["session-a"]).toBe(true)
+  })
+
+  test("a runtime switch during the status read keeps a confirmed restore in restoredIds", async () => {
+    unarchiveBatchResponse = { status: 200, body: { restored: [restored("session-a", "/test/project")], failedIds: [] } }
+    const source = createStore({}, { sessionStatusReady: true, sessionStatusInvalidated: { "session-a": true } })
+    const { switchRuntimeEndpoint } = await import("../lib/runtime-switch")
+    const { takeSessionActionFailure } = await import("./session-action-failures")
+    const { unarchiveSessions, setActionRefs } = await import("./session-actions")
+    setActionRefs(createChildStores([["/test/project", source]]), () => "/test/project")
+    takeSessionActionFailure(["session-a", "session-b"])
+    readActiveStatusSnapshot = async () => {
+      switchRuntimeEndpoint({ apiBaseUrl: "http://restore-status-runtime-b.test", runtimeKey: "restore-status-runtime-b" })
+      return { "session-a": { type: "busy" } }
+    }
+
+    expect(await unarchiveSessions(["session-a", "session-b"])).toEqual({
+      restoredIds: ["session-a"], failedIds: ["session-b"],
+    })
+    expect(globalUpsertedSessions).toHaveLength(1)
+    expect(source.getState().session_status["session-a"]).toBeUndefined()
+    expect(source.getState().sessionStatusInvalidated?.["session-a"]).toBe(true)
+    expect(openchamberRouteRequests.map((request) => request.body.ids)).toEqual([["session-a"]])
+    // A confirmed restore is not an action failure; the unattempted ID has no server error either.
+    expect(takeSessionActionFailure(["session-a", "session-b"])).toBeNull()
+  })
+
+  test("a rejected status read cannot turn an already-confirmed restore into an action failure", async () => {
+    unarchiveBatchResponse = { status: 200, body: { restored: [restored("session-a", "/test/project")], failedIds: [] } }
+    const source = createStore({}, { sessionStatusReady: true, sessionStatusInvalidated: { "session-a": true } })
+    const { takeSessionActionFailure } = await import("./session-action-failures")
+    const { unarchiveSession, setActionRefs } = await import("./session-actions")
+    setActionRefs(createChildStores([["/test/project", source]]), () => "/test/project")
+    takeSessionActionFailure(["session-a"])
+    readActiveStatusSnapshot = async () => { throw new Error("status read failed") }
+
+    expect(await unarchiveSession("session-a")).toBe(true)
+    expect(globalUpsertedSessions).toHaveLength(1)
+    expect(source.getState().sessionStatusInvalidated?.["session-a"]).toBe(true)
+    expect(takeSessionActionFailure(["session-a"])).toBeNull()
   })
 
   test("a status event during the restore read wins over its older snapshot", async () => {
