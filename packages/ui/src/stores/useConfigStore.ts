@@ -198,13 +198,14 @@ const normalizeOptionalString = (value: unknown): string | undefined => {
     return trimmed.length > 0 ? trimmed : undefined;
 };
 
-/** Looks a model up by its bare id (`modelID`); `Model.id` is provider-qualified. */
+/** A lookup accepts `modelID` or the entry's own `id`; a generated Fast model is keyed by the latter. */
+const matchesModelId = (model: Model, id: string): boolean => model.id === id || model.modelID === id;
 const findProviderModel = (
     providers: ProviderWithModelList[],
     providerId: string,
     modelId: string,
 ): Model | undefined => (
-    providers.find((provider) => provider.id === providerId)?.models.find((model) => model.modelID === modelId)
+    providers.find((provider) => provider.id === providerId)?.models.find((model) => matchesModelId(model, modelId))
 );
 
 /** v2 lists model variants as records with an `id`, not as a keyed map. */
@@ -226,7 +227,7 @@ const hasProviderModel = (
     if (!provider) {
         return false;
     }
-    return provider.models.some((model) => model.modelID === modelId);
+    return provider.models.some((model) => matchesModelId(model, modelId));
 };
 
 /**
@@ -3704,6 +3705,9 @@ export const useConfigStore = create<ConfigStore>()(
                             }
                             set({ isInitialized: true, isConnected: true, hasEverConnected: true, connectionPhase: "connected", lastInitFailure: null });
                             void get().prewarmProjectConfigs(configDirectory);
+                            // A plugin registers its agents while the server is already serving, so
+                            // the load above can race it. Re-check once, after startup has settled.
+                            setTimeout(() => void get().loadAgents({ directory: configDirectory, source: 'startupAgentRecheck' }), 8_000);
                             const initEnded = typeof performance !== 'undefined' ? performance.now() : Date.now();
                             markStartupTrace('initializeApp:end', {
                                 durationMs: Math.round(initEnded - initStarted),
@@ -3792,7 +3796,7 @@ export const useConfigStore = create<ConfigStore>()(
                     if (!provider) {
                         return undefined;
                     }
-                    return provider.models.find((model) => model.modelID === currentModelId);
+                    return provider.models.find((model) => matchesModelId(model, currentModelId));
                 },
 
                 getCurrentAgent: () => {
