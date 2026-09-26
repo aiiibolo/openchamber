@@ -1502,7 +1502,7 @@ export function registerGitHubRoutes(app) {
           const hasMore = fetchedCount < totalCount;
           return res.json({ connected: true, repo, prs, page: effectivePage, hasMore });
         } catch (error) {
-          console.error('Failed to search GitHub PRs:', error);
+          console.error('Failed to search or enrich GitHub PRs:', error);
           throw error;
         }
       }
