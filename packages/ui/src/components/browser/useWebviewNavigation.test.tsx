@@ -12,16 +12,26 @@ describe('webview navigation failures', () => {
   let navigation: WebviewNavigation;
   let currentUrl: string;
   let webview: WebviewElement;
+  let restoreGlobals: () => void;
 
   beforeEach(async () => {
     dom = new Window({ url: 'http://localhost/' });
-    Object.assign(globalThis, {
+    const globals = {
       window: dom,
       document: dom.document,
       navigator: dom.navigator,
       Event: dom.Event,
       IS_REACT_ACT_ENVIRONMENT: true,
-    });
+    };
+    const descriptors = Object.getOwnPropertyDescriptors(globalThis);
+    Object.assign(globalThis, globals);
+    restoreGlobals = () => {
+      for (const key of Object.keys(globals)) {
+        const descriptor = descriptors[key];
+        if (descriptor) Object.defineProperty(globalThis, key, descriptor);
+        else Reflect.deleteProperty(globalThis, key);
+      }
+    };
     host = document.createElement('div');
     document.body.appendChild(host);
     root = createRoot(host);
@@ -61,6 +71,7 @@ describe('webview navigation failures', () => {
     await act(async () => root.unmount());
     host.remove();
     await dom.happyDOM.close();
+    restoreGlobals();
   });
 
   test('keeps a failed navigation failed when stop-loading reports about:blank', async () => {
